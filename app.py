@@ -4,11 +4,7 @@ app.py
 CarbonTrace — Streamlit frontend.
 
 Collects activity inputs, calls calculate_footprint(), and displays the
-total, category breakdown, and source citation for every factor used.
-
-If a factor hasn't been sourced yet, MissingEmissionFactorError is caught
-here and shown as a clear message — not a stack trace, and not silently
-skipped.
+total, category breakdown chart, and source citations using Zenith's UI component.
 """
 
 import streamlit as st
@@ -16,6 +12,7 @@ import pandas as pd
 
 from calculator import calculate_footprint
 from emission_factors import MissingEmissionFactorError
+from results import render_results_screen
 
 st.set_page_config(page_title="CarbonTrace", page_icon="🌍")
 
@@ -97,26 +94,20 @@ if submitted:
         except ValueError as e:
             st.error(f"Check your input: {e}")
         else:
-            st.success(f"Total footprint: **{result.total_kg_co2e:.1f} kg CO2e**")
+            # Prepare data dictionaries required by Zenith's render_results_screen()
+            emissions_data = {
+                li.activity_label: li.co2e_kg 
+                for li in result.breakdown
+            }
+            
+            sources_data = [
+                {
+                    "Category": li.activity_label,
+                    "Factor Used": f"{li.factor_value} {li.unit}",
+                    "Source": li.factor_source_name
+                }
+                for li in result.breakdown
+            ]
 
-            if result.breakdown:
-                df = pd.DataFrame(
-                    [
-                        {"Category": li.activity_label, "kg CO2e": li.co2e_kg}
-                        for li in result.breakdown
-                    ]
-                )
-                st.bar_chart(df.set_index("Category"))
-
-                st.subheader("Sources used")
-                for li in result.breakdown:
-                    confidence_note = (
-                        f" · confidence: {li.factor_confidence}"
-                        if li.factor_confidence
-                        else ""
-                    )
-                    st.markdown(
-                        f"- **{li.activity_label}**: {li.quantity} × "
-                        f"{li.factor_value} {li.unit} = {li.co2e_kg:.1f} kg CO2e "
-                        f"— *{li.factor_source_name}*{confidence_note}"
-                    )
+            # Render UI
+            render_results_screen(emissions_data, sources_data)
